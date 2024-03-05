@@ -24,12 +24,6 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: 'Home' }
   },
   {
-    path: '/stylings',
-    name: RouteNames.STYLINGS,
-    component: () => import('@/views/StylingsView.vue'),
-    meta: { requiresAuth: false, title: 'Stylings' }
-  },
-  {
     path: '/secured',
     name: RouteNames.SECURED,
     component: () => import('@/views/SecuredView.vue'),
@@ -114,7 +108,7 @@ export default function getRouter() {
 
   router.afterEach((to) => {
     // Update document title
-    document.title = to.meta.title ? `Vue 3 Scaffold - ${to.meta.title}` : 'Vue 3 Scaffold';
+    document.title = to.meta.title ? `Mapping Innovation Sprint - ${to.meta.title}` : 'Mapping Innovation Sprint';
 
     appStore.endDeterminateLoading();
   });
