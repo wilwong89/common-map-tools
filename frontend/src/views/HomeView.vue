@@ -6,6 +6,7 @@ import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 
 import { onMounted, ref, toRaw, watch } from 'vue';
 import { Button, Dropdown, InputText } from '@/lib/primevue';
+import { storeToRefs } from 'pinia';
 
 import type { Ref } from 'vue';
 
@@ -14,6 +15,12 @@ const drawLayer: Ref<L.GeoJSON | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
 const overlayLayers: Ref<Array<{ name: string; layer: L.GeoJSON }>> = ref([]);
 const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
+
+// Store
+const { getConfig } = storeToRefs(useConfigStore());
+import { useConfigStore } from '@/store';
+
+const addressSearchString: Ref<string> = ref('');
 
 // Actions
 let map: L.Map;
@@ -38,6 +45,45 @@ function deleteOverlayLayer() {
     layerControl.removeLayer(drawLayer.value);
     overlayLayers.value = overlayLayers.value.filter((x) => x.layer !== drawLayer.value);
     drawLayer.value = overlayLayers.value[0].layer;
+  }
+}
+let marker: L.Marker;
+function setAddressMarker(coords: any) {
+  if (marker) map.removeLayer(marker);
+  // Custom(-ish) markers courtesy of https://github.com/pointhi/leaflet-color-markers
+  const redIcon = new L.Icon({
+    iconUrl: 'https://raw.githubusercontent.com/pointhi/leaflet-color-markers/master/img/marker-icon-red.png',
+    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/0.7.7/images/marker-shadow.png',
+    iconSize: [25, 41],
+    iconAnchor: [12, 41],
+    popupAnchor: [1, -34],
+    shadowSize: [41, 41]
+  });
+  marker = L.marker(coords, { icon: redIcon });
+  map.addLayer(marker);
+}
+
+async function moveMapFocus() {
+  const params = new URLSearchParams({
+    addressString: addressSearchString.value,
+    maxResults: '1',
+    provinceCode: 'BC'
+  }).toString();
+
+  // TODO: move geocoder lookups to backend - we don't want to expose the API key
+  const resp = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`, {
+    headers: { apikey: getConfig.value.geocoder.apiKey }
+  });
+  const results = await resp.json();
+
+  if (results.features.length == 0) alert('Cannot find address :(');
+  else {
+    const [lng, lat] = results.features[0].geometry.coordinates;
+    const addressLocation = { lat: lat, lng: lng };
+    map.panTo(addressLocation);
+    map.setZoom(17);
+
+    setAddressMarker(addressLocation);
   }
 }
 
@@ -122,6 +168,17 @@ onMounted(() => {
           <p class="mt-0">{{ selectedFeature.toGeoJSON() }}</p>
         </div>
       </span>
+      <p class="font-bold mt-2 mb-0">Find address</p>
+      <div class="flex">
+        <InputText
+          v-model="addressSearchString"
+          class="flex flex-auto mr-1"
+        />
+        <Button
+          icon="pi pi-check"
+          @click="moveMapFocus"
+        />
+      </div>
     </div>
     <div
       id="map"

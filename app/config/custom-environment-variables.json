@@ -5,6 +5,10 @@
     "oidc": {
       "authority": "FRONTEND_OIDC_AUTHORITY",
       "clientId": "FRONTEND_OIDC_CLIENTID"
+    },
+    "geocoder": {
+      "apiKey": "FRONTEND_GEOCODER_APIKEY",
+      "apiPath": "FRONTEND_GEOCODER_APIPATH"
     }
   },
   "server": {
