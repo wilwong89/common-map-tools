@@ -5,8 +5,10 @@ import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 
 import { onMounted, ref, toRaw, watch } from 'vue';
-import { Button, Dropdown, InputText } from '@/lib/primevue';
+import { Button, Column, DataTable, Dropdown, InputText } from '@/lib/primevue';
 import { storeToRefs } from 'pinia';
+
+import { dataService } from '@/services';
 
 import type { Ref } from 'vue';
 
@@ -15,6 +17,7 @@ const drawLayer: Ref<L.GeoJSON | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
 const overlayLayers: Ref<Array<{ name: string; layer: L.GeoJSON }>> = ref([]);
 const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
+const parcelData = ref('a');
 
 // Store
 const { getConfig } = storeToRefs(useConfigStore());
@@ -32,6 +35,14 @@ function createOverlayLayer() {
     layerControl.addOverlay(newLayer, newOverlayLayerName.value);
     overlayLayers.value.push({ name: newOverlayLayerName.value, layer: newLayer });
     newOverlayLayerName.value = '';
+
+    // on polygon create
+    map.on('pm:create', async (e) => {
+      // zoom in
+      map.fitBounds(e.layer.getBounds());
+      // show parcel data
+      showParcelData(e.layer.getLatLngs()[0]);
+    });
 
     newLayer.on('click', (event) => {
       selectedFeature.value = event.propagatedFrom;
@@ -121,6 +132,12 @@ function initMap() {
   layerControl = L.control.layers(baseMaps).addTo(map);
 }
 
+async function showParcelData(data) {
+  await dataService.getParcelData(data).then((data) => {
+    parcelData.value = data.features.map((f) => f.properties);
+  });
+}
+
 watch(drawLayer, () => {
   if (drawLayer.value) {
     map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value) });
@@ -184,6 +201,34 @@ onMounted(() => {
       id="map"
       class="w-9"
     />
+  </div>
+
+  <div
+    v-if="parcelData.length"
+    class="py-2 mw-50"
+  >
+    <h3>Parcel Data</h3>
+    <DataTable
+      :value="parcelData"
+      data-key="PID"
+      class="p-datatable-sm"
+      responsive-layout="scroll"
+      :paginator="true"
+      :rows="5"
+    >
+      <Column
+        field="PID"
+        header="Parcel ID"
+      ></Column>
+      <Column
+        field="OWNER_TYPE"
+        header="Owner Type"
+      ></Column>
+      <Column
+        field="PARCEL_CLASS"
+        header="Parcel Class"
+      ></Column>
+    </DataTable>
   </div>
 </template>
 
