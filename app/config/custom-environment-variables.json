@@ -10,6 +10,15 @@
   "server": {
     "apiPath": "SERVER_APIPATH",
     "bodyLimit": "SERVER_BODYLIMIT",
+    "db": {
+      "database": "SERVER_DB_DATABASE",
+      "host": "SERVER_DB_HOST",
+      "password": "SERVER_DB_PASSWORD",
+      "poolMin": "SERVER_DB_POOL_MIN",
+      "poolMax": "SERVER_DB_POOL_MAX",
+      "port": "SERVER_DB_PORT",
+      "username": "SERVER_DB_USERNAME"
+    },
     "oidc": {
       "enabled": "SERVER_OIDC_ENABLED",
       "clientId": "SERVER_OIDC_CLIENTID",

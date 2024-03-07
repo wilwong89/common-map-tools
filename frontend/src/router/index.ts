@@ -24,12 +24,6 @@ const routes: Array<RouteRecordRaw> = [
     meta: { title: 'Home' }
   },
   {
-    path: '/secured',
-    name: RouteNames.SECURED,
-    component: () => import('@/views/SecuredView.vue'),
-    meta: { requiresAuth: true, title: 'Secured' }
-  },
-  {
     path: '/developer',
     name: RouteNames.DEVELOPER,
     component: () => import('@/views/DeveloperView.vue'),

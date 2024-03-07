@@ -1,66 +1,55 @@
 <script setup lang="ts">
 import * as L from 'leaflet';
-
 import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 
-import { onMounted, ref, watch } from 'vue';
+import { onMounted, ref, toRaw, watch } from 'vue';
 import { Button, Dropdown, InputText } from '@/lib/primevue';
-import { storeToRefs } from 'pinia';
 
-import { useConfigStore } from '@/store';
-import type { GeoJSON, Geometry } from 'geojson';
 import type { Ref } from 'vue';
 
-// Types
+// State
+const drawLayer: Ref<L.GeoJSON | undefined> = ref(undefined);
+const newOverlayLayerName: Ref<string> = ref('');
+const overlayLayers: Ref<Array<{ name: string; layer: L.GeoJSON }>> = ref([]);
+const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
 
-// Store
-const { getConfig } = storeToRefs(useConfigStore());
-
-const layers: Ref<Array<{ name: string; layer: L.GeoJSON<any, Geometry> }>> = ref([]);
-const selectedLayer: Ref<L.GeoJSON<any, Geometry> | undefined> = ref(undefined);
-const newLayerName: Ref<string> = ref('');
-
+// Actions
 let map: L.Map;
 let layerControl: L.Control.Layers;
 
-// Actions
-function createLayer() {
-  if (newLayerName.value && newLayerName.value.length > 0) {
+function createOverlayLayer() {
+  if (newOverlayLayerName.value && newOverlayLayerName.value.length > 0) {
     const newLayer = L.geoJSON().addTo(map);
-    layerControl.addOverlay(newLayer, newLayerName.value);
-    layers.value.push({ name: newLayerName.value, layer: newLayer });
+    layerControl.addOverlay(newLayer, newOverlayLayerName.value);
+    overlayLayers.value.push({ name: newOverlayLayerName.value, layer: newLayer });
+    newOverlayLayerName.value = '';
 
     newLayer.on('click', (event) => {
-      console.log('Shape clicked!');
-      console.log('Layer', event.propagatedFrom);
-      console.log('Geojson', event.propagatedFrom.toGeoJSON());
-      if (event.propagatedFrom.getLatLngs) {
-        console.log('Coords', event.propagatedFrom.getLatLngs());
-      }
+      selectedFeature.value = event.propagatedFrom;
     });
-
-    newLayerName.value = '';
   }
 }
 
-function deleteLayer() {
-  if (selectedLayer.value) {
-    selectedLayer.value.removeFrom(map);
-    layerControl.removeLayer(selectedLayer.value);
-    layers.value = layers.value.filter((x) => x.layer !== selectedLayer.value);
-    selectedLayer.value = layers.value[0].layer;
+function deleteOverlayLayer() {
+  if (drawLayer.value) {
+    drawLayer.value.removeFrom(map);
+    layerControl.removeLayer(drawLayer.value);
+    overlayLayers.value = overlayLayers.value.filter((x) => x.layer !== drawLayer.value);
+    drawLayer.value = overlayLayers.value[0].layer;
   }
 }
 
-watch(selectedLayer, () => {
-  if (selectedLayer.value) {
-    map.pm.setGlobalOptions({ layerGroup: selectedLayer.value });
-  }
-});
+function initGeoman() {
+  map.pm.addControls({
+    position: 'topleft',
+    drawCircleMarker: false,
+    rotateMode: false
+  });
+}
 
-onMounted(() => {
+function initMap() {
   const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -72,143 +61,78 @@ onMounted(() => {
     layers: [osm]
   });
 
-  // add Leaflet-Geoman controls with some options to the map
-  map.pm.addControls({
-    position: 'topleft',
-    drawCircleMarker: false,
-    rotateMode: false
+  /* Don't allow dragging outside BC */
+  const bcBounds = new L.LatLngBounds([44, -140], [63, -109]);
+  map.setMaxBounds(bcBounds);
+  map.on('drag', function () {
+    map.panInsideBounds(bcBounds, { animate: false });
   });
-
-  // 48.424552-123.343506,48.425691,-123.336124,48.422159,-123.327885,48.418856,123.334579, 48.419311,-123.342819,48.424552,-123.343506
-
-  const geo1: Array<GeoJSON> = [
-    {
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-123.343506, 48.424552],
-            [-123.336124, 48.425691],
-            [-123.327885, 48.422159],
-            [-123.334579, 48.418856],
-            [-123.342819, 48.419311],
-            [-123.343506, 48.424552]
-          ]
-        ]
-      }
-    },
-    {
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'Point',
-        coordinates: [-123.357239, 48.424096]
-      }
-    }
-  ];
-
-  const geo2: Array<GeoJSON> = [
-    {
-      type: 'Feature',
-      properties: {},
-      geometry: {
-        type: 'Polygon',
-        coordinates: [
-          [
-            [-123.335094, 48.4356],
-            [-123.340588, 48.432867],
-            [-123.329773, 48.430019],
-            [-123.324623, 48.433664],
-            [-123.335094, 48.4356]
-          ]
-        ]
-      }
-    }
-  ];
 
   const baseMaps = {
     OpenStreetMap: osm
   };
 
-  var geoLayer1 = L.geoJSON().addTo(map);
-  var geoLayer2 = L.geoJSON().addTo(map);
+  layerControl = L.control.layers(baseMaps).addTo(map);
+}
 
-  layers.value = [
-    { name: 'Geo1', layer: geoLayer1 },
-    { name: 'Geo2', layer: geoLayer2 }
-  ];
+watch(drawLayer, () => {
+  if (drawLayer.value) {
+    map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value) });
+  }
+});
 
-  const overlayMaps = {
-    Geo1: geoLayer1,
-    Geo2: geoLayer2
-  };
-
-  layerControl = L.control.layers(baseMaps, overlayMaps).addTo(map);
-
-  selectedLayer.value = geoLayer1;
-
-  geoLayer1.on('click', (event) => {
-    console.log('Shape clicked!');
-    console.log('Layer', event.propagatedFrom);
-    console.log('Geojson', event.propagatedFrom.toGeoJSON());
-    if (event.propagatedFrom.getLatLngs) {
-      console.log('Coords', event.propagatedFrom.getLatLngs());
-    }
-  });
-  geoLayer1.addData(geo1);
-
-  geoLayer2.on('click', (event) => {
-    console.log('Shape clicked!');
-    console.log('Layer', event.propagatedFrom);
-    console.log('Geojson', event.propagatedFrom.toGeoJSON());
-    if (event.propagatedFrom.getLatLngs) {
-      console.log('Coords', event.propagatedFrom.getLatLngs());
-    }
-  });
-  geoLayer2.addData(geo2);
+onMounted(() => {
+  initMap();
+  initGeoman();
 });
 </script>
 
 <template>
   <div class="flex flex-row w-full">
-    <div class="flex flex-column mr-2">
-      <p class="font-bold mt-0 mb-0">Select draw layer</p>
+    <div class="flex flex-column mr-2 w-3">
+      <p class="font-bold mt-0 mb-0">Set draw layer</p>
       <Dropdown
-        v-model="selectedLayer"
+        v-model="drawLayer"
         class="mb-2"
-        :options="layers"
+        :options="overlayLayers"
         option-label="name"
         option-value="layer"
       />
       <Button
         severity="danger"
-        @click="deleteLayer"
+        :disabled="overlayLayers.length <= 1"
+        @click="deleteOverlayLayer"
       >
         Delete layer
       </Button>
       <p class="font-bold mt-2 mb-0">Create layer</p>
       <div class="flex">
         <InputText
-          v-model="newLayerName"
-          class="mr-1"
+          v-model="newOverlayLayerName"
+          class="flex flex-auto mr-1"
         />
         <Button
           icon="pi pi-check"
-          @click="createLayer"
+          @click="createOverlayLayer"
         />
       </div>
+      <span v-if="selectedFeature">
+        <p class="font-bold mt-2 mb-0">Selected layer</p>
+        <div class="flex flex-wrap-1">
+          <p class="mt-0">{{ selectedFeature.toGeoJSON() }}</p>
+        </div>
+      </span>
     </div>
     <div
       id="map"
-      class="flex flex-auto"
+      class="w-9"
     />
   </div>
 </template>
 
 <style scoped lang="scss">
 #map {
-  height: 800px;
+  height: 500px;
+  width: 100%;
 }
 </style>

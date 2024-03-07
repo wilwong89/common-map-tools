@@ -6,7 +6,15 @@ export default {
    * Returns the secured view page header
    * @returns {Promise} An axios response
    */
-  helloWorld() {
-    return appAxios().get('hello');
+  getFeatures() {
+    return appAxios().get('layer');
+  },
+
+  createFeature() {
+    return appAxios().put('layer');
+  },
+
+  deleteFeature() {
+    return appAxios().delete('layer');
   }
 };
