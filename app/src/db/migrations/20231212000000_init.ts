@@ -46,8 +46,8 @@ export async function up(knex: Knex): Promise<void> {
       )
 
       .then(() =>
-        knex.schema.createTable('layer', (table) => {
-          table.specificType('layer_id', 'integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY');
+        knex.schema.createTable('feature_group', (table) => {
+          table.specificType('feature_group_id', 'integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY');
           table.text('name').notNullable();
           stamps(knex, table);
         })
@@ -56,7 +56,12 @@ export async function up(knex: Knex): Promise<void> {
       .then(() =>
         knex.schema.createTable('feature', (table) => {
           table.specificType('feature_id', 'integer GENERATED ALWAYS AS IDENTITY PRIMARY KEY');
-          table.integer('layer_id').references('layer_id').inTable('layer').onUpdate('CASCADE').onDelete('CASCADE');
+          table
+            .integer('feature_group_id')
+            .references('feature_group_id')
+            .inTable('feature_group')
+            .onUpdate('CASCADE')
+            .onDelete('CASCADE');
           table.text('geo_type').notNullable();
           table.json('geo_json').notNullable();
           stamps(knex, table);
@@ -200,8 +205,8 @@ export async function up(knex: Knex): Promise<void> {
       )
 
       .then(() =>
-        knex.schema.raw(`CREATE TRIGGER audit_layer_trigger
-          AFTER UPDATE OR DELETE ON "layer"
+        knex.schema.raw(`CREATE TRIGGER audit_feature_group_trigger
+          AFTER UPDATE OR DELETE ON "feature_group"
           FOR EACH ROW EXECUTE PROCEDURE audit.if_modified_func();`)
       )
 
@@ -230,7 +235,7 @@ export async function down(knex: Knex): Promise<void> {
     Promise.resolve()
       // Drop audit triggers
       .then(() => knex.schema.raw('DROP TRIGGER IF EXISTS audit_feature_trigger ON "feature"'))
-      .then(() => knex.schema.raw('DROP TRIGGER IF EXISTS audit_layer_trigger ON "layer"'))
+      .then(() => knex.schema.raw('DROP TRIGGER IF EXISTS audit_feature_group_trigger ON "feature_group"'))
       .then(() => knex.schema.raw('DROP TRIGGER IF EXISTS audit_user_trigger ON "user"'))
       .then(() => knex.schema.raw('DROP TRIGGER IF EXISTS audit_identity_provider_trigger ON identity_provider'))
       // Drop audit schema and logged_actions table
@@ -239,7 +244,7 @@ export async function down(knex: Knex): Promise<void> {
       .then(() => knex.schema.dropSchemaIfExists('audit'))
       // Drop public schema tables
       .then(() => knex.schema.dropTableIfExists('feature'))
-      .then(() => knex.schema.dropTableIfExists('layer'))
+      .then(() => knex.schema.dropTableIfExists('feature_group'))
       .then(() => knex.schema.dropTableIfExists('user'))
       .then(() => knex.schema.dropTableIfExists('identity_provider'))
   );

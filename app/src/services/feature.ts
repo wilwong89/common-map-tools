@@ -1,31 +1,37 @@
-/* eslint-disable no-useless-catch */
+import prisma from '../db/dataConnection';
+import { feature } from '../db/models';
+import { Feature } from '../types/Feature';
 
 const service = {
-  getFeatures: async () => {
-    try {
-      const response = 'Hello world!';
-      return response;
-    } catch (e: unknown) {
-      throw e;
-    }
+  getFeatures: async (): Promise<Feature[]> => {
+    const response = await prisma.feature.findMany();
+
+    return response
+      .map((x) => feature.fromPrismaModel(x))
+      .filter((x) => !!x)
+      .map((x) => x as Feature);
   },
 
-  createFeature: async () => {
-    try {
-      const response = 'Hello world!';
-      return response;
-    } catch (e: unknown) {
-      throw e;
-    }
+  createFeature: async (data: any) => {
+    const response = await prisma.feature.create({
+      data: {
+        feature_group_id: data.properties.featureGroupId,
+        geo_type: data.geometry.type,
+        geo_json: data
+      }
+    });
+
+    return feature.fromPrismaModel(response);
   },
 
-  deleteFeature: async () => {
-    try {
-      const response = 'Hello world!';
-      return response;
-    } catch (e: unknown) {
-      throw e;
-    }
+  deleteFeature: async (featureId: number) => {
+    const response = await prisma.feature.delete({
+      where: {
+        feature_id: featureId
+      }
+    });
+
+    return feature.fromPrismaModel(response);
   }
 };
 

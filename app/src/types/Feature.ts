@@ -1,6 +1,6 @@
 export type Feature = {
   featureId: number;
-  layerId: number;
+  featureGroupId: number | null;
   geoType: string;
-  geoJson: string;
+  geoJson: object;
 };

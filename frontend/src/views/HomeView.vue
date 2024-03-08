@@ -4,20 +4,23 @@ import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 
+import * as geojson from 'geojson';
+
 import { onMounted, ref, toRaw, watch } from 'vue';
-import { Button, Column, DataTable, Dropdown, InputText } from '@/lib/primevue';
+import { Button, Column, DataTable, Dropdown, InputText, useToast } from '@/lib/primevue';
 import { storeToRefs } from 'pinia';
 
-import { dataService } from '@/services';
+import { dataService, featureGroupService, featureService } from '@/services';
 
 import type { Ref } from 'vue';
+import type { Feature, FeatureGroup } from '@/types';
 
 // State
-const drawLayer: Ref<L.GeoJSON | undefined> = ref(undefined);
+const drawLayer: Ref<FeatureGroup | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
-const overlayLayers: Ref<Array<{ name: string; layer: L.GeoJSON }>> = ref([]);
+const overlayLayers: Ref<Array<FeatureGroup>> = ref([]);
 const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
-const parcelData = ref('a');
+const parcelData: Ref<any> = ref(undefined);
 
 // Store
 const { getConfig } = storeToRefs(useConfigStore());
@@ -26,39 +29,50 @@ import { useConfigStore } from '@/store';
 const addressSearchString: Ref<string> = ref('');
 
 // Actions
-let map: L.Map;
+const toast = useToast();
+
 let layerControl: L.Control.Layers;
-
-function createOverlayLayer() {
-  if (newOverlayLayerName.value && newOverlayLayerName.value.length > 0) {
-    const newLayer = L.geoJSON().addTo(map);
-    layerControl.addOverlay(newLayer, newOverlayLayerName.value);
-    overlayLayers.value.push({ name: newOverlayLayerName.value, layer: newLayer });
-    newOverlayLayerName.value = '';
-
-    // on polygon create
-    map.on('pm:create', async (e) => {
-      // zoom in
-      map.fitBounds(e.layer.getBounds());
-      // show parcel data
-      showParcelData(e.layer.getLatLngs()[0]);
-    });
-
-    newLayer.on('click', (event) => {
-      selectedFeature.value = event.propagatedFrom;
-    });
-  }
-}
-
-function deleteOverlayLayer() {
-  if (drawLayer.value) {
-    drawLayer.value.removeFrom(map);
-    layerControl.removeLayer(drawLayer.value);
-    overlayLayers.value = overlayLayers.value.filter((x) => x.layer !== drawLayer.value);
-    drawLayer.value = overlayLayers.value[0].layer;
-  }
-}
 let marker: L.Marker;
+let map: L.Map;
+
+function addOverlayLayer(data: FeatureGroup) {
+  if (!data.layer) {
+    data.layer = new L.GeoJSON().addTo(map);
+  }
+  layerControl.addOverlay(data.layer, data.name);
+  overlayLayers.value.push(data);
+
+  data.layer.on('click', (event) => {
+    selectedFeature.value = event.propagatedFrom;
+  });
+}
+
+async function createOverlayLayer() {
+  try {
+    if (newOverlayLayerName.value) {
+      const result = await featureGroupService.createFeatureGroup(newOverlayLayerName.value);
+      newOverlayLayerName.value = '';
+      addOverlayLayer(result.data);
+    }
+  } catch (e: any) {
+    toast.error('Error', e.message);
+  }
+}
+
+async function deleteOverlayLayer() {
+  if (drawLayer.value) {
+    try {
+      await featureGroupService.deleteFeatureGroup(drawLayer.value.featureGroupId);
+      drawLayer.value.layer.removeFrom(map);
+      layerControl.removeLayer(drawLayer.value.layer);
+      overlayLayers.value = overlayLayers.value.filter((x) => x !== drawLayer.value);
+      drawLayer.value = overlayLayers.value[0];
+    } catch (e: any) {
+      toast.error('Error', e.message);
+    }
+  }
+}
+
 function setAddressMarker(coords: any) {
   if (marker) map.removeLayer(marker);
   // Custom(-ish) markers courtesy of https://github.com/pointhi/leaflet-color-markers
@@ -101,12 +115,22 @@ async function moveMapFocus() {
 function initGeoman() {
   map.pm.addControls({
     position: 'topleft',
+
+    // Create
     drawCircleMarker: false,
+    drawCircle: false,
+    drawText: false,
+    drawPolyline: false,
+
+    // Edit
+    cutPolygon: false,
+    dragMode: false,
+    editMode: false,
     rotateMode: false
   });
 }
 
-function initMap() {
+async function initMap() {
   const osm = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 19,
     attribution: '&copy; <a href="http://www.openstreetmap.org/copyright">OpenStreetMap</a>'
@@ -118,7 +142,45 @@ function initMap() {
     layers: [osm]
   });
 
-  /* Don't allow dragging outside BC */
+  // On feature create
+  map.on('pm:create', async (e) => {
+    try {
+      const geo = e.layer as L.GeoJSON;
+
+      /* @ts-expect-error Ignore TS typings and force in feature_group_id */
+      geo.feature = {
+        properties: { featureGroupId: drawLayer.value?.featureGroupId }
+      };
+
+      // Create new feature
+      /* @ts-expect-error The spread doesn't overwrite type, but it thinks it does */
+      const result = (await featureService.createFeature({ type: 'Feature', ...geo.toGeoJSON() })).data;
+
+      drawLayer.value?.layer.removeLayer(geo);
+      drawLayer.value?.layer.addData(result.geoJson);
+
+      // Zoom in
+      if (geo.getBounds) map.fitBounds(geo.getBounds());
+
+      // Show parcel data
+      if (geo.getLatLngs) showParcelData(geo.getLatLngs()[0]);
+    } catch (e: any) {
+      toast.error('Error', e.message);
+    }
+  });
+
+  // On feature remove
+  map.on('pm:remove', async (e) => {
+    try {
+      const geo = e.layer as L.GeoJSON;
+      const feature = geo.feature as geojson.Feature;
+      await featureService.deleteFeature(feature.properties?.featureId);
+    } catch (e: any) {
+      toast.error('Error', e.message);
+    }
+  });
+
+  // Don't allow dragging outside BC
   const bcBounds = new L.LatLngBounds([44, -140], [63, -109]);
   map.setMaxBounds(bcBounds);
   map.on('drag', function () {
@@ -130,9 +192,27 @@ function initMap() {
   };
 
   layerControl = L.control.layers(baseMaps).addTo(map);
+
+  // Load overlay layers
+  const featureGroups = (await featureGroupService.getFeatureGroups()).data;
+  featureGroups.forEach((fg: FeatureGroup) => {
+    addOverlayLayer(fg);
+  });
+
+  // Set initial draw layer
+  if (featureGroups.length) {
+    drawLayer.value = featureGroups[0];
+  }
+
+  // Load overlay features
+  const feature = (await featureService.getFeatures()).data;
+  feature.forEach((fg: Feature) => {
+    const overlayLayer = overlayLayers.value.find((x) => x.featureGroupId === fg.featureGroupId);
+    overlayLayer?.layer.addData(fg.geoJson);
+  });
 }
 
-async function showParcelData(data) {
+async function showParcelData(data: unknown) {
   await dataService.getParcelData(data).then((data) => {
     parcelData.value = data.features.map((f) => f.properties);
   });
@@ -140,12 +220,12 @@ async function showParcelData(data) {
 
 watch(drawLayer, () => {
   if (drawLayer.value) {
-    map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value) });
+    map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value).layer });
   }
 });
 
-onMounted(() => {
-  initMap();
+onMounted(async () => {
+  await initMap();
   initGeoman();
 });
 </script>
@@ -159,7 +239,6 @@ onMounted(() => {
         class="mb-2"
         :options="overlayLayers"
         option-label="name"
-        option-value="layer"
       />
       <Button
         severity="danger"
@@ -204,7 +283,7 @@ onMounted(() => {
   </div>
 
   <div
-    v-if="parcelData.length"
+    v-if="parcelData"
     class="py-2 mw-50"
   >
     <h3>Parcel Data</h3>
@@ -219,15 +298,15 @@ onMounted(() => {
       <Column
         field="PID"
         header="Parcel ID"
-      ></Column>
+      />
       <Column
         field="OWNER_TYPE"
         header="Owner Type"
-      ></Column>
+      />
       <Column
         field="PARCEL_CLASS"
         header="Parcel Class"
-      ></Column>
+      />
     </DataTable>
   </div>
 </template>

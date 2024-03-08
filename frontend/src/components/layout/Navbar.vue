@@ -4,8 +4,6 @@ import { storeToRefs } from 'pinia';
 import { Toolbar } from '@/lib/primevue';
 import { useAuthStore } from '@/store';
 import { RouteNames } from '@/utils/constants';
-
-const { getIsAuthenticated } = storeToRefs(useAuthStore());
 </script>
 
 <template>
@@ -15,9 +13,6 @@ const { getIsAuthenticated } = storeToRefs(useAuthStore());
         <ol class="list-none m-0 p-0 flex flex-row align-items-center font-semibold">
           <li>
             <router-link :to="{ name: RouteNames.HOME }">Home</router-link>
-          </li>
-          <li v-if="getIsAuthenticated">
-            <router-link :to="{ name: RouteNames.SECURED }">Secured</router-link>
           </li>
         </ol>
       </template>

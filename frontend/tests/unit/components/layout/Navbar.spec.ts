@@ -56,8 +56,6 @@ describe('Navbar.vue', () => {
       const linkEle = wrapper.findAll('a');
       expect(linkEle).toHaveLength(3);
       expect(linkEle[0].text()).toBe('Home');
-      expect(linkEle[1].text()).toBe('Stylings');
-      expect(linkEle[2].text()).toBe('Secured');
     });
 
     it('shows correct navbar when false', async () => {
