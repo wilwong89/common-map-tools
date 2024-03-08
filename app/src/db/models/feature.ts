@@ -12,7 +12,7 @@ export default {
   toPrismaModel(input: Feature): PrismaRelationFeature {
     return {
       feature_id: input.featureId,
-      layer_id: input.layerId,
+      feature_group_id: input.featureGroupId,
       geo_type: input.geoType,
       geo_json: input.geoJson
     };
@@ -23,9 +23,9 @@ export default {
 
     return {
       featureId: input.feature_id,
-      layerId: input.layer_id,
+      featureGroupId: input.feature_group_id,
       geoType: input.geo_type,
-      geoJson: input.geo_json
+      geoJson: input.geo_json as object
     };
   }
 };

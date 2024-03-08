@@ -6,7 +6,7 @@
     "apiPath": "/api/v1",
     "bodyLimit": "30mb",
     "db": {
-      "database": "mapping",
+      "database": "cmt",
       "host": "localhost",
       "port": "5432",
       "poolMin": "2",

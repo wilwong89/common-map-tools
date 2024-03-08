@@ -15,7 +15,7 @@ router.put('/', (req: Request, res: Response, next: NextFunction): void => {
   featureController.createFeature(req, res, next);
 });
 
-router.delete('/', (req: Request, res: Response, next: NextFunction): void => {
+router.delete('/:featureId', (req: Request, res: Response, next: NextFunction): void => {
   featureController.deleteFeature(req, res, next);
 });
 

@@ -1,2 +1,2 @@
 export { default as featureService } from './feature';
-export { default as layerService } from './layer';
+export { default as featureGroupService } from './featureGroup';

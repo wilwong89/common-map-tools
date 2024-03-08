@@ -13,7 +13,6 @@ export const RouteNames = Object.freeze({
   HOME: 'home',
   LOGIN: 'login',
   LOGOUT: 'logout',
-  SECURED: 'secured',
   STYLINGS: 'stylings'
 });
 

@@ -1,2 +1,2 @@
 export { default as featureController } from './feature';
-export { default as layerController } from './layer';
+export { default as featureGroupController } from './featureGroup';

@@ -1,6 +1,8 @@
+import * as geojson from 'geojson';
+
 export type Feature = {
   featureId: number;
-  layerId: number;
+  featureGroupId: number;
   geoType: string;
-  geoJson: string;
+  geoJson: geojson.GeoJSON;
 };
