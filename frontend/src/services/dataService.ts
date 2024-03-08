@@ -2,15 +2,15 @@ import proj4 from 'proj4';
 
 export default {
   /**
-   * @function getParcelData
+   * @function getParcelDataFromPMBC
    * DataBC’s Open Web Services
-   * For accessing geographic data via WMS/WFS
+   * Accessing geographic data via WMS/WFS
    * Services Provided by OCIO - Digital Platforms & Data - Data Systems & Services
    * ref: https://docs.geoserver.org/main/en/user/services/wfs/reference.html#getfeature
    * ref: https://catalogue.data.gov.bc.ca/dataset/parcelmap-bc-parcel-fabric
    * @returns parcel data in JSON
    */
-  async getParcelData(polygon) {
+  async getParcelDataFromPMBC(polygon) {
     // close polygon by re-adding first point to end of array
     const points = polygon.concat(polygon[0]);
 

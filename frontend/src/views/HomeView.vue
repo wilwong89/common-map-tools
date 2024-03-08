@@ -15,6 +15,9 @@ import { dataService, featureGroupService, featureService } from '@/services';
 import type { Ref } from 'vue';
 import type { Feature, FeatureGroup } from '@/types';
 
+// Store
+const { getConfig } = storeToRefs(useConfigStore());
+
 // State
 const drawLayer: Ref<FeatureGroup | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
@@ -28,6 +31,9 @@ import { useConfigStore } from '@/store';
 
 const addressDropdownOptions: Ref<Array<string>> = ref([]);
 const addressSearchString: Ref<string> = ref('');
+const parcelData = ref(undefined);
+const selectedParcel = ref(undefined);
+const parcelDetail = ref(undefined);
 
 // Actions
 const toast = useToast();
@@ -104,9 +110,8 @@ async function moveMapFocus() {
   } else {
     const [lng, lat] = results.features[0].geometry.coordinates;
     const addressLocation = { lat: lat, lng: lng };
-    map.panTo(addressLocation);
-    map.setZoom(17);
 
+    map.flyTo(addressLocation, 17);
     setAddressMarker(addressLocation);
   }
 }
@@ -233,7 +238,9 @@ async function showParcelData(data: unknown) {
     parcelData.value = data.features.map((f) => f.properties);
   });
 }
+const rowClass = (data: any) => [{ 'selected-row': data.PARCEL_FABRIC_POLY_ID === selectedParcel.value }];
 
+// set geoman global options
 watch(drawLayer, () => {
   if (drawLayer.value) {
     map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value).layer });
@@ -296,11 +303,6 @@ onMounted(async () => {
         />
       </div>
     </div>
-    <div
-      id="map"
-      class="w-9"
-    />
-  </div>
 
   <div
     v-if="parcelData"
@@ -332,8 +334,30 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
+.max-width-1200 {
+  max-width: 1200px;
+}
 #map {
-  height: 500px;
+  height: 400px;
   width: 100%;
+}
+:deep(.selected-row) {
+  background: #f2f2f2 !important;
+}
+:deep(.p-button-text) {
+  &,
+  &:hover,
+  &:focus,
+  &:active {
+    outline: none;
+    background: none;
+    border: none;
+    transition: none;
+    box-shadow: none !important;
+    color: #1a5a96 !important;
+  }
+}
+:deep(a) {
+  color: #1a5a96;
 }
 </style>
