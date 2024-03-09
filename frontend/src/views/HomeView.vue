@@ -26,6 +26,7 @@ const parcelData: Ref<any> = ref(undefined);
 const { getConfig } = storeToRefs(useConfigStore());
 import { useConfigStore } from '@/store';
 
+const addressDropdownOptions: Ref<Array<string>> = ref([]);
 const addressSearchString: Ref<string> = ref('');
 
 // Actions
@@ -95,20 +96,35 @@ async function moveMapFocus() {
     provinceCode: 'BC'
   }).toString();
 
-  // TODO: move geocoder lookups to backend - we don't want to expose the API key
-  const resp = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`, {
-    headers: { apikey: getConfig.value.geocoder.apiKey }
-  });
-  const results = await resp.json();
+  const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`);
+  const results = await response.json();
 
-  if (results.features.length == 0) alert('Cannot find address :(');
-  else {
+  if (results.features.length == 0) {
+    toast.info('Unable to find address');
+  } else {
     const [lng, lat] = results.features[0].geometry.coordinates;
     const addressLocation = { lat: lat, lng: lng };
     map.panTo(addressLocation);
     map.setZoom(17);
 
     setAddressMarker(addressLocation);
+  }
+}
+
+async function autocompleteAddressSearch() {
+  if (addressSearchString.value.length >= 3) {
+    const params = new URLSearchParams({
+      minScore: '50',
+      maxResults: '5',
+      echo: 'false',
+      brief: 'true',
+      autoComplete: 'true',
+      addressString: addressSearchString.value
+    });
+
+    const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.json?${params}`);
+    const results = await response.json();
+    addressDropdownOptions.value = results.features.map((x: any) => x.properties.fullAddress);
   }
 }
 
@@ -266,9 +282,13 @@ onMounted(async () => {
       </span>
       <p class="font-bold mt-2 mb-0">Find address</p>
       <div class="flex">
-        <InputText
+        <Dropdown
           v-model="addressSearchString"
+          editable
+          name="addressSearch"
           class="flex flex-auto mr-1"
+          :options="addressDropdownOptions"
+          @input="autocompleteAddressSearch"
         />
         <Button
           icon="pi pi-check"
