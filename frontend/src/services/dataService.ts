@@ -1,5 +1,11 @@
 import proj4 from 'proj4';
 
+import { storeToRefs } from 'pinia';
+import { useConfigStore } from '@/store';
+
+// // Store
+// const { getConfig } = storeToRefs(useConfigStore());
+
 export default {
   /**
    * @function getParcelDataFromPMBC
@@ -43,5 +49,35 @@ export default {
     );
     const data = await response.json();
     return data;
+  },
+
+  // TODO: move geocoder lookups to backend - we don't want to expose the API key
+  async geocodeAddress(params) {
+    const { getConfig } = storeToRefs(useConfigStore());
+
+    const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`, {
+      headers: { apikey: getConfig.value.geocoder.apiKey }
+    });
+
+    return response;
+  },
+
+  async geocodeSitesInArea(coordinates) {
+    const { getConfig } = storeToRefs(useConfigStore());
+    const response = await fetch(
+      `${getConfig.value.geocoder.apiPath}sites/within.json?outputSRS=4326&maxResults=10&locationDescriptor=any&setBack=0&brief=false&excludeUnits=false&onlyCivic=false&bbox=${coordinates}`,
+      {
+        headers: { apikey: getConfig.value.geocoder.apiKey }
+      }
+    );
+    return response;
+  },
+
+  async geocodePidForSite(siteId) {
+    const { getConfig } = storeToRefs(useConfigStore());
+    const response = await fetch(`${getConfig.value.geocoder.apiPath}/parcels/pids/${siteId}.json`, {
+      headers: { apikey: getConfig.value.geocoder.apiKey }
+    });
+    return response;
   }
 };

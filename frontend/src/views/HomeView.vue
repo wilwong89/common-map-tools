@@ -15,9 +15,6 @@ import { dataService, featureGroupService, featureService } from '@/services';
 import type { Ref } from 'vue';
 import type { Feature, FeatureGroup } from '@/types';
 
-// Store
-const { getConfig } = storeToRefs(useConfigStore());
-
 // State
 const drawLayer: Ref<FeatureGroup | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
@@ -34,6 +31,10 @@ const addressSearchString: Ref<string> = ref('');
 const parcelData = ref(undefined);
 const selectedParcel = ref(undefined);
 const parcelDetail = ref(undefined);
+const siteData = ref(undefined);
+const siteDetail = ref(undefined);
+const sitePidDetail = ref(undefined);
+const selectedSite = ref(undefined);
 
 // Actions
 const toast = useToast();
@@ -334,8 +335,8 @@ onMounted(async () => {
 </template>
 
 <style scoped lang="scss">
-.max-width-1200 {
-  max-width: 1200px;
+.max-width-1500 {
+  max-width: 1500px;
 }
 #map {
   height: 400px;
@@ -359,5 +360,12 @@ onMounted(async () => {
 }
 :deep(a) {
   color: #1a5a96;
+}
+:deep(.p-paginator) {
+  padding-left: 0.5rem;
+}
+.detail {
+  padding: 0.5rem;
+  background: #f2f2f2;
 }
 </style>
