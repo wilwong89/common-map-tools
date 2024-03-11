@@ -1,16 +1,22 @@
 import proj4 from 'proj4';
 
+import { storeToRefs } from 'pinia';
+import { useConfigStore } from '@/store';
+
+// // Store
+// const { getConfig } = storeToRefs(useConfigStore());
+
 export default {
   /**
-   * @function getParcelData
+   * @function getParcelDataFromPMBC
    * DataBC’s Open Web Services
-   * For accessing geographic data via WMS/WFS
+   * Accessing geographic data via WMS/WFS
    * Services Provided by OCIO - Digital Platforms & Data - Data Systems & Services
    * ref: https://docs.geoserver.org/main/en/user/services/wfs/reference.html#getfeature
    * ref: https://catalogue.data.gov.bc.ca/dataset/parcelmap-bc-parcel-fabric
    * @returns parcel data in JSON
    */
-  async getParcelData(polygon) {
+  async getParcelDataFromPMBC(polygon) {
     // close polygon by re-adding first point to end of array
     const points = polygon.concat(polygon[0]);
 
@@ -43,5 +49,46 @@ export default {
     );
     const data = await response.json();
     return data;
+  },
+
+  // TODO: move geocoder lookups to backend - we don't want to expose the API key
+  async geocodeAddress(params) {
+    const { getConfig } = storeToRefs(useConfigStore());
+
+    const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`, {
+      headers: { apikey: getConfig.value.geocoder.apiKey }
+    });
+
+    return response;
+  },
+
+  async geocodeSitesInArea(coordinates) {
+    const { getConfig } = storeToRefs(useConfigStore());
+
+    const lats = [];
+    const lngs = [];
+    coordinates.forEach((o) => {
+      lats.push(o.lat);
+      lngs.push(o.lng);
+    });
+    lats.sort();
+    lngs.sort();
+    const str = `${lngs[0]},${lats[0]},${lngs[2]},${lats[2]}`;
+
+    const response = await fetch(
+      `${getConfig.value.geocoder.apiPath}sites/within.json?outputSRS=4326&maxResults=100&locationDescriptor=any&setBack=0&brief=false&excludeUnits=false&onlyCivic=false&bbox=${str}`,
+      {
+        headers: { apikey: getConfig.value.geocoder.apiKey }
+      }
+    );
+    return response;
+  },
+
+  async geocodePidForSite(siteId) {
+    const { getConfig } = storeToRefs(useConfigStore());
+    const response = await fetch(`${getConfig.value.geocoder.apiPath}/parcels/pids/${siteId}.json`, {
+      headers: { apikey: getConfig.value.geocoder.apiKey }
+    });
+    return response;
   }
 };
