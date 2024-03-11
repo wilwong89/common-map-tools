@@ -14,20 +14,20 @@ import type { Ref } from 'vue';
 import type { Feature, FeatureGroup } from '@/types';
 
 // State
+const addressDropdownOptions: Ref<Array<string>> = ref([]);
+const addressSearchString: Ref<string> = ref('');
 const drawLayer: Ref<FeatureGroup | undefined> = ref(undefined);
 const newOverlayLayerName: Ref<string> = ref('');
 const overlayLayers: Ref<Array<FeatureGroup>> = ref([]);
+const parcelData: Ref<Array<unknown>> = ref([]);
+const parcelDetail: Ref<unknown> = ref(undefined);
 const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
-const parcelData: Ref<any> = ref(undefined);
-const addressDropdownOptions: Ref<Array<string>> = ref([]);
-const addressSearchString: Ref<string> = ref('');
-const showAddLayerInput = ref(false);
-const selectedParcel = ref(undefined);
-const parcelDetail = ref(undefined);
-const siteData = ref(undefined);
-const siteDetail = ref(undefined);
-const sitePidDetail = ref(undefined);
-const selectedSite = ref(undefined);
+const selectedParcel: Ref<number | undefined> = ref(undefined);
+const selectedSite: Ref<unknown> = ref(undefined);
+const showAddLayerInput: Ref<boolean> = ref(false);
+const siteData: Ref<Array<unknown>> = ref([]);
+const siteDetail: Ref<unknown> = ref(undefined);
+const sitePidDetail: Ref<unknown> = ref(undefined);
 
 // Actions
 const toast = useToast();
@@ -45,7 +45,18 @@ function addOverlayLayer(data: FeatureGroup) {
 
   data.layer.on('click', (event) => {
     selectedFeature.value = event.propagatedFrom;
+
+    if (selectedFeature.value) {
+      // selectedFeature.value always seems to be instanceof L.Polygon?
+      siteData.value = [];
+      showPMBCParcelData(selectedFeature.value.getLatLngs()[0]);
+    }
   });
+
+  // Set draw layer if needed
+  if (!drawLayer.value) {
+    drawLayer.value = data;
+  }
 }
 
 async function createOverlayLayer() {
@@ -118,7 +129,7 @@ async function autocompleteAddressSearch() {
       brief: 'true',
       autoComplete: 'true',
       addressString: addressSearchString.value
-    });
+    }).toString();
 
     const response = await dataService.geocodeAddress(params);
     const results = await response.json();
@@ -127,30 +138,34 @@ async function autocompleteAddressSearch() {
 }
 
 // show parcel data from Geocoder
-async function showPMBCParcelData(data) {
-  await dataService.getParcelDataFromPMBC(data).then((data) => {
-    parcelData.value = data.features.map((f) => f.properties);
+async function showPMBCParcelData(polygon: Array<any>) {
+  await dataService.getParcelDataFromPMBC(polygon).then((data: any) => {
+    parcelData.value = data.features.map((f: any) => f.properties);
   });
 }
-function showParcelSidebar(id) {
-  parcelDetail.value = parcelData.value.find((p) => p.PARCEL_FABRIC_POLY_ID === id);
+
+function showParcelSidebar(id: number) {
+  parcelDetail.value = parcelData.value.find((p: any) => p.PARCEL_FABRIC_POLY_ID === id);
   selectedParcel.value = id;
 }
+
 const parcelRowClass = (data: any) => [{ 'selected-row': data.PARCEL_FABRIC_POLY_ID === selectedParcel.value }];
 
 // show site data from Geocoder
-async function showSiteData(coordinates) {
+async function showSiteData(coordinates: Array<any>) {
   const resp = await dataService.geocodeSitesInArea(coordinates);
   const results = await resp.json();
-  siteData.value = results.features.map((feature) => feature.properties);
+  siteData.value = results.features.map((feature: any) => feature.properties);
 }
-async function showSiteSidebar(id) {
+
+async function showSiteSidebar(id: number) {
   selectedSite.value = id;
-  siteDetail.value = siteData.value.find((s) => s.siteID === id);
+  siteDetail.value = siteData.value?.find((s: any) => s.siteID === id);
   const resp = await dataService.geocodePidForSite(id);
   const results = await resp.json();
   sitePidDetail.value = results;
 }
+
 const siteRowClass = (data: any) => [{ 'selected-row': data.siteID === selectedSite.value }];
 
 function initGeoman() {
@@ -202,14 +217,13 @@ async function initMap() {
 
       // Zoom in
       if (geo.getBounds) map.fitBounds(geo.getBounds());
-      else map.flyTo(geo._latlng, 17);
+      else map.flyTo(geo.getLatLng(), 17);
 
-      // If drawing a Polygon, show parcel data using WFS api
-      if (e.layer.pm._shape === 'Polygon') {
-        showPMBCParcelData(geo.getLatLngs()[0]);
-      }
-      // if drawing a rectagle show site data using BC Address Gecoder
-      else if (e.layer.pm._shape === 'Rectangle') {
+      // Show parcel data using WFS api
+      showPMBCParcelData(geo.getLatLngs()[0]);
+
+      // If drawing a rectagle show site data using BC Address Gecoder
+      if (e.shape === 'Rectangle') {
         showSiteData(geo.getLatLngs()[0]);
       }
     } catch (e: any) {
@@ -247,22 +261,11 @@ async function initMap() {
     addOverlayLayer(fg);
   });
 
-  // Set initial draw layer
-  if (featureGroups.length) {
-    drawLayer.value = featureGroups[0];
-  }
-
   // Load overlay features
   const feature = (await featureService.getFeatures()).data;
   feature.forEach((fg: Feature) => {
     const overlayLayer = overlayLayers.value.find((x) => x.featureGroupId === fg.featureGroupId);
     overlayLayer?.layer.addData(fg.geoJson);
-  });
-}
-
-async function showParcelData(data: unknown) {
-  await dataService.getParcelData(data).then((data) => {
-    parcelData.value = data.features.map((f) => f.properties);
   });
 }
 
@@ -302,39 +305,34 @@ onMounted(async () => {
       <!-- layer conrols -->
       <Panel header="Layers">
         <div class="flex">
-          <span
+          <div
             v-if="overlayLayers.length"
-            class="mr-4"
+            class="flex"
           >
             <Dropdown
               v-model="drawLayer"
               :options="overlayLayers"
               option-label="name"
-              option-value="layer"
             />
             <Button
               v-if="overlayLayers.length > 0"
-              @click="deleteOverlayLayer"
               severity="primary"
               text
+              @click="deleteOverlayLayer"
             >
               Delete
             </Button>
-            |
-          </span>
-
-          <span v-if="overlayLayers.length > 0 && !showAddLayerInput">
             <Button
-              @click="showAddLayerInput = true"
-              class="pl-0"
+              v-if="overlayLayers.length > 0 && !showAddLayerInput"
               severity="primary"
               text
+              @click="showAddLayerInput = true"
             >
               Add new layer
             </Button>
-          </span>
+          </div>
 
-          <span
+          <div
             v-if="showAddLayerInput || overlayLayers.length === 0"
             class="flex align-items-center"
           >
@@ -344,20 +342,21 @@ onMounted(async () => {
               class="flex flex-auto ml-2"
             />
             <Button
+              class="ml-1"
+              icon="pi pi-plus"
               @click="
                 createOverlayLayer();
                 showAddLayerInput = false;
               "
-              icon="pi pi-plus"
             />
             <Button
               v-if="overlayLayers.length > 0"
-              @click="showAddLayerInput = false"
               text
+              @click="showAddLayerInput = false"
             >
-              cancel
+              Cancel
             </Button>
-          </span>
+          </div>
         </div>
       </Panel>
     </div>
@@ -369,9 +368,9 @@ onMounted(async () => {
     <div class="col-12">
       <!-- Selected feature -->
       <Panel
+        v-if="selectedFeature"
         toggleable
         collapsed
-        v-if="selectedFeature"
         header="Selected Feature"
       >
         <pre>{{ selectedFeature.toGeoJSON() }}</pre>
@@ -381,8 +380,8 @@ onMounted(async () => {
     <div class="col-12">
       <!-- PMBC Parcel details -->
       <Panel
-        toggleable
         v-if="parcelData?.length"
+        toggleable
       >
         <template #header>
           <span>
@@ -421,16 +420,15 @@ onMounted(async () => {
               <Column
                 field="OWNER_TYPE"
                 header="Owner Type"
-              ></Column>
+              />
               <Column
                 field="PID_FORMATTED"
                 header="PID"
-              ></Column>
+              />
               <Column
                 field="PARCEL_CLASS"
                 header="Parcel Class"
-              ></Column>
-
+              />
               <template #paginatorstart>Total parcels: {{ parcelData.length }}</template>
             </DataTable>
           </div>
@@ -450,8 +448,8 @@ onMounted(async () => {
       <!-- geocoder results -->
 
       <Panel
-        toggleable
         v-if="siteData?.length"
+        toggleable
       >
         <template #header>
           <span>
@@ -490,7 +488,7 @@ onMounted(async () => {
               <Column
                 field="fullAddress"
                 header="Full Address"
-              ></Column>
+              />
               <template #paginatorstart>Total sites: {{ siteData.length }}</template>
             </DataTable>
           </div>

@@ -31,6 +31,16 @@ model feature {
   feature_group    feature_group? @relation(fields: [feature_group_id], references: [feature_group_id], onDelete: Cascade, map: "feature_feature_group_id_foreign")
 }
 
+model feature_group {
+  feature_group_id Int       @id @default(autoincrement())
+  name             String
+  created_by       String?   @default("00000000-0000-0000-0000-000000000000")
+  created_at       DateTime? @default(now()) @db.Timestamptz(6)
+  updated_by       String?
+  updated_at       DateTime? @db.Timestamptz(6)
+  feature          feature[]
+}
+
 model identity_provider {
   idp        String    @id
   active     Boolean   @default(true)
@@ -60,14 +70,4 @@ model user {
   @@index([email], map: "user_email_index")
   @@index([identity_id], map: "user_identity_id_index")
   @@index([username], map: "user_username_index")
-}
-
-model feature_group {
-  feature_group_id Int       @id @default(autoincrement())
-  name             String
-  created_by       String?   @default("00000000-0000-0000-0000-000000000000")
-  created_at       DateTime? @default(now()) @db.Timestamptz(6)
-  updated_by       String?
-  updated_at       DateTime? @db.Timestamptz(6)
-  feature          feature[]
 }
