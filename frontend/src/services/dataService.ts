@@ -64,8 +64,19 @@ export default {
 
   async geocodeSitesInArea(coordinates) {
     const { getConfig } = storeToRefs(useConfigStore());
+
+    const lats = [];
+    const lngs = [];
+    coordinates.forEach((o) => {
+      lats.push(o.lat);
+      lngs.push(o.lng);
+    });
+    lats.sort();
+    lngs.sort();
+    const str = `${lngs[0]},${lats[0]},${lngs[2]},${lats[2]}`;
+
     const response = await fetch(
-      `${getConfig.value.geocoder.apiPath}sites/within.json?outputSRS=4326&maxResults=10&locationDescriptor=any&setBack=0&brief=false&excludeUnits=false&onlyCivic=false&bbox=${coordinates}`,
+      `${getConfig.value.geocoder.apiPath}sites/within.json?outputSRS=4326&maxResults=100&locationDescriptor=any&setBack=0&brief=false&excludeUnits=false&onlyCivic=false&bbox=${str}`,
       {
         headers: { apikey: getConfig.value.geocoder.apiKey }
       }

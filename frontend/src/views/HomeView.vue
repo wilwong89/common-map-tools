@@ -7,9 +7,7 @@ import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
 import * as geojson from 'geojson';
 
 import { onMounted, ref, toRaw, watch } from 'vue';
-import { Button, Column, DataTable, Dropdown, InputText, useToast } from '@/lib/primevue';
-import { storeToRefs } from 'pinia';
-
+import { Button, Column, DataTable, Dropdown, InputText, useToast, Panel } from '@/lib/primevue';
 import { dataService, featureGroupService, featureService } from '@/services';
 
 import type { Ref } from 'vue';
@@ -21,14 +19,9 @@ const newOverlayLayerName: Ref<string> = ref('');
 const overlayLayers: Ref<Array<FeatureGroup>> = ref([]);
 const selectedFeature: Ref<L.GeoJSON | undefined> = ref(undefined);
 const parcelData: Ref<any> = ref(undefined);
-
-// Store
-const { getConfig } = storeToRefs(useConfigStore());
-import { useConfigStore } from '@/store';
-
 const addressDropdownOptions: Ref<Array<string>> = ref([]);
 const addressSearchString: Ref<string> = ref('');
-const parcelData = ref(undefined);
+const showAddLayerInput = ref(false);
 const selectedParcel = ref(undefined);
 const parcelDetail = ref(undefined);
 const siteData = ref(undefined);
@@ -103,7 +96,7 @@ async function moveMapFocus() {
     provinceCode: 'BC'
   }).toString();
 
-  const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.geojson?${params}`);
+  const response = await dataService.geocodeAddress(params);
   const results = await response.json();
 
   if (results.features.length == 0) {
@@ -111,7 +104,6 @@ async function moveMapFocus() {
   } else {
     const [lng, lat] = results.features[0].geometry.coordinates;
     const addressLocation = { lat: lat, lng: lng };
-
     map.flyTo(addressLocation, 17);
     setAddressMarker(addressLocation);
   }
@@ -128,11 +120,38 @@ async function autocompleteAddressSearch() {
       addressString: addressSearchString.value
     });
 
-    const response = await fetch(`${getConfig.value.geocoder.apiPath}/addresses.json?${params}`);
+    const response = await dataService.geocodeAddress(params);
     const results = await response.json();
     addressDropdownOptions.value = results.features.map((x: any) => x.properties.fullAddress);
   }
 }
+
+// show parcel data from Geocoder
+async function showPMBCParcelData(data) {
+  await dataService.getParcelDataFromPMBC(data).then((data) => {
+    parcelData.value = data.features.map((f) => f.properties);
+  });
+}
+function showParcelSidebar(id) {
+  parcelDetail.value = parcelData.value.find((p) => p.PARCEL_FABRIC_POLY_ID === id);
+  selectedParcel.value = id;
+}
+const parcelRowClass = (data: any) => [{ 'selected-row': data.PARCEL_FABRIC_POLY_ID === selectedParcel.value }];
+
+// show site data from Geocoder
+async function showSiteData(coordinates) {
+  const resp = await dataService.geocodeSitesInArea(coordinates);
+  const results = await resp.json();
+  siteData.value = results.features.map((feature) => feature.properties);
+}
+async function showSiteSidebar(id) {
+  selectedSite.value = id;
+  siteDetail.value = siteData.value.find((s) => s.siteID === id);
+  const resp = await dataService.geocodePidForSite(id);
+  const results = await resp.json();
+  sitePidDetail.value = results;
+}
+const siteRowClass = (data: any) => [{ 'selected-row': data.siteID === selectedSite.value }];
 
 function initGeoman() {
   map.pm.addControls({
@@ -183,9 +202,16 @@ async function initMap() {
 
       // Zoom in
       if (geo.getBounds) map.fitBounds(geo.getBounds());
+      else map.flyTo(geo._latlng, 17);
 
-      // Show parcel data
-      if (geo.getLatLngs) showParcelData(geo.getLatLngs()[0]);
+      // If drawing a Polygon, show parcel data using WFS api
+      if (e.layer.pm._shape === 'Polygon') {
+        showPMBCParcelData(geo.getLatLngs()[0]);
+      }
+      // if drawing a rectagle show site data using BC Address Gecoder
+      else if (e.layer.pm._shape === 'Rectangle') {
+        showSiteData(geo.getLatLngs()[0]);
+      }
     } catch (e: any) {
       toast.error('Error', e.message);
     }
@@ -239,9 +265,7 @@ async function showParcelData(data: unknown) {
     parcelData.value = data.features.map((f) => f.properties);
   });
 }
-const rowClass = (data: any) => [{ 'selected-row': data.PARCEL_FABRIC_POLY_ID === selectedParcel.value }];
 
-// set geoman global options
 watch(drawLayer, () => {
   if (drawLayer.value) {
     map.pm.setGlobalOptions({ layerGroup: toRaw(drawLayer.value).layer });
@@ -253,84 +277,237 @@ onMounted(async () => {
   initGeoman();
 });
 </script>
-
 <template>
-  <div class="flex flex-row w-full">
-    <div class="flex flex-column mr-2 w-3">
-      <p class="font-bold mt-0 mb-0">Set draw layer</p>
-      <Dropdown
-        v-model="drawLayer"
-        class="mb-2"
-        :options="overlayLayers"
-        option-label="name"
-      />
-      <Button
-        severity="danger"
-        :disabled="overlayLayers.length <= 1"
-        @click="deleteOverlayLayer"
-      >
-        Delete layer
-      </Button>
-      <p class="font-bold mt-2 mb-0">Create layer</p>
-      <div class="flex">
-        <InputText
-          v-model="newOverlayLayerName"
-          class="flex flex-auto mr-1"
-        />
-        <Button
-          icon="pi pi-check"
-          @click="createOverlayLayer"
-        />
-      </div>
-      <span v-if="selectedFeature">
-        <p class="font-bold mt-2 mb-0">Selected layer</p>
-        <div class="flex flex-wrap-1">
-          <p class="mt-0">{{ selectedFeature.toGeoJSON() }}</p>
+  <div class="grid nested-grid max-width-1500">
+    <div class="col-6">
+      <!-- geocode address -->
+      <Panel header="Geocode an address">
+        <div class="flex max-w-20rem">
+          <Dropdown
+            v-model="addressSearchString"
+            editable
+            name="addressSearch"
+            class="flex flex-auto mr-1"
+            :options="addressDropdownOptions"
+            @input="autocompleteAddressSearch"
+          />
+          <Button
+            icon="pi pi-search"
+            @click="moveMapFocus"
+          />
         </div>
-      </span>
-      <p class="font-bold mt-2 mb-0">Find address</p>
-      <div class="flex">
-        <Dropdown
-          v-model="addressSearchString"
-          editable
-          name="addressSearch"
-          class="flex flex-auto mr-1"
-          :options="addressDropdownOptions"
-          @input="autocompleteAddressSearch"
-        />
-        <Button
-          icon="pi pi-check"
-          @click="moveMapFocus"
-        />
-      </div>
+      </Panel>
+    </div>
+    <div class="col-6">
+      <!-- layer conrols -->
+      <Panel header="Layers">
+        <div class="flex">
+          <span
+            v-if="overlayLayers.length"
+            class="mr-4"
+          >
+            <Dropdown
+              v-model="drawLayer"
+              :options="overlayLayers"
+              option-label="name"
+              option-value="layer"
+            />
+            <Button
+              v-if="overlayLayers.length > 0"
+              @click="deleteOverlayLayer"
+              severity="primary"
+              text
+            >
+              Delete
+            </Button>
+            |
+          </span>
+
+          <span v-if="overlayLayers.length > 0 && !showAddLayerInput">
+            <Button
+              @click="showAddLayerInput = true"
+              class="pl-0"
+              severity="primary"
+              text
+            >
+              Add new layer
+            </Button>
+          </span>
+
+          <span
+            v-if="showAddLayerInput || overlayLayers.length === 0"
+            class="flex align-items-center"
+          >
+            <label for="newOverlayLayerName">Name:</label>
+            <InputText
+              v-model="newOverlayLayerName"
+              class="flex flex-auto ml-2"
+            />
+            <Button
+              @click="
+                createOverlayLayer();
+                showAddLayerInput = false;
+              "
+              icon="pi pi-plus"
+            />
+            <Button
+              v-if="overlayLayers.length > 0"
+              @click="showAddLayerInput = false"
+              text
+            >
+              cancel
+            </Button>
+          </span>
+        </div>
+      </Panel>
+    </div>
+    <div class="col-12">
+      <!-- map -->
+      <div id="map" />
     </div>
 
-  <div
-    v-if="parcelData"
-    class="py-2 mw-50"
-  >
-    <h3>Parcel Data</h3>
-    <DataTable
-      :value="parcelData"
-      data-key="PID"
-      class="p-datatable-sm"
-      responsive-layout="scroll"
-      :paginator="true"
-      :rows="5"
-    >
-      <Column
-        field="PID"
-        header="Parcel ID"
-      />
-      <Column
-        field="OWNER_TYPE"
-        header="Owner Type"
-      />
-      <Column
-        field="PARCEL_CLASS"
-        header="Parcel Class"
-      />
-    </DataTable>
+    <div class="col-12">
+      <!-- Selected feature -->
+      <Panel
+        toggleable
+        collapsed
+        v-if="selectedFeature"
+        header="Selected Feature"
+      >
+        <pre>{{ selectedFeature.toGeoJSON() }}</pre>
+      </Panel>
+    </div>
+
+    <div class="col-12">
+      <!-- PMBC Parcel details -->
+      <Panel
+        toggleable
+        v-if="parcelData?.length"
+      >
+        <template #header>
+          <span>
+            <span class="font-semibold">Parcel Data</span>
+            - data source:
+            <a href="https://catalogue.data.gov.bc.ca/dataset/4cf233c2-f020-4f7a-9b87-1923252fbc24">
+              ParcelMap BC Parcel Fabric
+            </a>
+          </span>
+        </template>
+        <div class="grid">
+          <div class="col-7">
+            <DataTable
+              :value="parcelData"
+              data-key="PARCEL_FABRIC_POLY_ID"
+              class="p-datatable-sm"
+              responsive-layout="scroll"
+              :paginator="true"
+              :rows="10"
+              :row-class="parcelRowClass"
+            >
+              <Column
+                field="PARCEL_FABRIC_POLY_ID"
+                header="PARCEL_FABRIC_POLY_ID"
+              >
+                <template #body="slotProps">
+                  <Button
+                    class="p-0"
+                    text
+                    @click="showParcelSidebar(slotProps.data.PARCEL_FABRIC_POLY_ID)"
+                  >
+                    {{ slotProps.data.PARCEL_FABRIC_POLY_ID }}
+                  </Button>
+                </template>
+              </Column>
+              <Column
+                field="OWNER_TYPE"
+                header="Owner Type"
+              ></Column>
+              <Column
+                field="PID_FORMATTED"
+                header="PID"
+              ></Column>
+              <Column
+                field="PARCEL_CLASS"
+                header="Parcel Class"
+              ></Column>
+
+              <template #paginatorstart>Total parcels: {{ parcelData.length }}</template>
+            </DataTable>
+          </div>
+          <div class="col-5">
+            <div
+              v-if="parcelDetail"
+              class="detail"
+            >
+              <strong>Parcel Detail:</strong>
+              <pre>{{ parcelDetail }}</pre>
+            </div>
+          </div>
+        </div>
+      </Panel>
+    </div>
+    <div class="col-12">
+      <!-- geocoder results -->
+
+      <Panel
+        toggleable
+        v-if="siteData?.length"
+      >
+        <template #header>
+          <span>
+            <span class="font-semibold">Site Data</span>
+            - data source:
+            <a href="https://www2.gov.bc.ca/gov/content/data/geographic-data-services/location-services/geocoder">
+              BC Address Geocoder
+            </a>
+          </span>
+        </template>
+        <div class="grid">
+          <div class="col-7">
+            <DataTable
+              :value="siteData"
+              data-key="siteID"
+              class="p-datatable-sm"
+              responsive-layout="scroll"
+              :paginator="true"
+              :rows="10"
+              :row-class="siteRowClass"
+            >
+              <Column
+                field="siteID"
+                header="Site ID"
+              >
+                <template #body="slotProps">
+                  <Button
+                    class="p-0"
+                    text
+                    @click="showSiteSidebar(slotProps.data.siteID)"
+                  >
+                    {{ slotProps.data.siteID }}
+                  </Button>
+                </template>
+              </Column>
+              <Column
+                field="fullAddress"
+                header="Full Address"
+              ></Column>
+              <template #paginatorstart>Total sites: {{ siteData.length }}</template>
+            </DataTable>
+          </div>
+          <div class="col-5">
+            <div
+              v-if="siteDetail"
+              class="detail"
+            >
+              <strong>Site Detail:</strong>
+              <pre>{{ siteDetail }}</pre>
+              <strong>Site PIDs:</strong>
+              <pre>{{ sitePidDetail }}</pre>
+            </div>
+          </div>
+        </div>
+      </Panel>
+    </div>
   </div>
 </template>
 
