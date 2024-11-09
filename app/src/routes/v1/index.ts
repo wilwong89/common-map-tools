@@ -4,7 +4,7 @@ import feature from './feature';
 import featureGroup from './featureGroup';
 
 const router = express.Router();
-router.use(currentUser);
+// router.use(currentUser);
 
 // Base v1 Responder
 router.get('/', (_req, res) => {

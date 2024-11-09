@@ -64,7 +64,7 @@ export const currentUser = async (req: Request, res: Response, next: NextFunctio
     }
   }
 
-  // Inject currentUser data into request
+  // // Inject currentUser data into request
   req.currentUser = Object.freeze(currentUser);
 
   // Continue middleware

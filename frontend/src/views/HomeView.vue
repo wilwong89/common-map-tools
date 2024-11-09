@@ -3,6 +3,7 @@ import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '@geoman-io/leaflet-geoman-free';
 import '@geoman-io/leaflet-geoman-free/dist/leaflet-geoman.css';
+import { useRoute } from 'vue-router';
 
 import * as geojson from 'geojson';
 
@@ -29,12 +30,16 @@ const siteData: Ref<Array<unknown>> = ref([]);
 const siteDetail: Ref<unknown> = ref(undefined);
 const sitePidDetail: Ref<unknown> = ref(undefined);
 
+const showStuff: Ref<boolean> = ref(true);
+
 // Actions
 const toast = useToast();
 
 let layerControl: L.Control.Layers;
 let marker: L.Marker;
 let map: L.Map;
+
+const route = useRoute();
 
 function addOverlayLayer(data: FeatureGroup) {
   if (!data.layer) {
@@ -212,6 +217,9 @@ async function initMap() {
       /* @ts-expect-error The spread doesn't overwrite type, but it thinks it does */
       const result = (await featureService.createFeature({ type: 'Feature', ...geo.toGeoJSON() })).data;
 
+      console.log('geo', geo);
+      console.log('json', geo.toGeoJSON());
+
       drawLayer.value?.layer.removeLayer(geo);
       drawLayer.value?.layer.addData(result.geoJson);
 
@@ -282,7 +290,11 @@ onMounted(async () => {
 </script>
 <template>
   <div class="grid nested-grid max-width-1500">
-    <div class="col-6">
+    <!-- <div>{{ route.query }}</div> -->
+    <div
+      v-if="showStuff"
+      class="col-6"
+    >
       <!-- geocode address -->
       <Panel header="Geocode an address">
         <div class="flex max-w-20rem">
@@ -301,10 +313,16 @@ onMounted(async () => {
         </div>
       </Panel>
     </div>
-    <div class="col-6">
+    <div
+      v-if="showStuff"
+      class="col-6"
+    >
       <!-- layer conrols -->
       <Panel header="Layers">
-        <div class="flex">
+        <div
+          v-if="showStuff"
+          class="flex"
+        >
           <div
             v-if="overlayLayers.length"
             class="flex"

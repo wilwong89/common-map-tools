@@ -1,11 +1,11 @@
 import express from 'express';
 import { featureController } from '../../controllers';
-import { requireSomeAuth } from '../../middleware/requireSomeAuth';
+// import { requireSomeAuth } from '../../middleware/requireSomeAuth';
 
 import type { NextFunction, Request, Response } from 'express';
 
 const router = express.Router();
-router.use(requireSomeAuth);
+// router.use(requireSomeAuth);
 
 router.get('/', (req: Request, res: Response, next: NextFunction): void => {
   featureController.getFeatures(req, res, next);
